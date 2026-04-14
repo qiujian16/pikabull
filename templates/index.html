@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PikaBull ⚡🐂</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <!-- Marked (markdown → HTML) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+  <style>
+    :root {
+      --buy-color:  #ef5350;
+      --hold-color: #ff9800;
+      --sell-color: #26a69a;
+      --sidebar-w: 340px;
+    }
+
+    body { background: #f4f6f9; font-family: "PingFang SC", "Helvetica Neue", sans-serif; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: #fff;
+      border-right: 1px solid #e0e0e0;
+      height: 100vh;
+      overflow-y: auto;
+      position: sticky;
+      top: 0;
+    }
+    #sidebar .brand { font-weight: 700; font-size: 1.1rem; color: #1a237e; }
+
+    /* ── Stock tags ── */
+    .stock-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #e8eaf6; color: #1a237e;
+      border-radius: 20px; padding: 3px 10px 3px 12px;
+      font-size: .85rem; font-weight: 500; margin: 3px;
+    }
+    .stock-tag .remove { cursor: pointer; opacity: .6; }
+    .stock-tag .remove:hover { opacity: 1; }
+
+    /* ── Autocomplete dropdown ── */
+    #search-dropdown {
+      position: absolute; z-index: 1000; width: 100%;
+      background: #fff; border: 1px solid #ddd;
+      border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,.1);
+      max-height: 260px; overflow-y: auto; display: none;
+    }
+    #search-dropdown .item {
+      padding: 8px 14px; cursor: pointer; font-size: .9rem;
+    }
+    #search-dropdown .item:hover { background: #f0f4ff; }
+    #search-dropdown .item .code { color: #888; font-size: .8rem; margin-left: 6px; }
+
+    /* ── Main content ── */
+    #main { flex: 1; overflow-y: auto; padding: 24px; }
+
+    /* ── Stock analysis card ── */
+    .stock-card {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      margin-bottom: 28px; overflow: hidden;
+    }
+    .stock-card .card-header {
+      background: #1a237e; color: #fff;
+      padding: 16px 20px; display: flex; align-items: center; gap: 10px;
+    }
+    .stock-card .card-header .stock-title { font-size: 1.15rem; font-weight: 700; }
+    .stock-card .card-header .badge-decision {
+      font-size: .85rem; font-weight: 600;
+      border-radius: 20px; padding: 4px 14px;
+    }
+    .badge-BUY  { background: var(--buy-color);  color: #fff; }
+    .badge-HOLD { background: var(--hold-color); color: #fff; }
+    .badge-SELL { background: var(--sell-color); color: #fff; }
+
+    /* ── Step timeline ── */
+    .step-timeline { padding: 16px 20px; }
+    .step-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      margin-bottom: 8px; font-size: .88rem;
+    }
+    .step-icon { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: .75rem; }
+    .step-icon.pending  { background: #f0f0f0; color: #aaa; }
+    .step-icon.running  { background: #e3f2fd; color: #1976d2; }
+    .step-icon.done     { background: #e8f5e9; color: #388e3c; }
+
+    /* ── Report accordion ── */
+    .report-section { border-top: 1px solid #f0f0f0; }
+    .report-section .section-title {
+      padding: 12px 20px; cursor: pointer; user-select: none;
+      display: flex; align-items: center; justify-content: space-between;
+      font-weight: 600; font-size: .92rem;
+      background: #fafafa;
+    }
+    .report-section .section-title:hover { background: #f0f4ff; }
+    .report-section .section-body {
+      padding: 16px 20px; display: none;
+      font-size: .88rem; line-height: 1.7;
+      border-top: 1px solid #f0f0f0;
+    }
+    .report-section .section-body.open { display: block; }
+
+    /* debate layout */
+    .debate-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 768px) { .debate-grid { grid-template-columns: 1fr; } }
+    .bull-box { background: #fff5f5; border-left: 3px solid var(--buy-color);  padding: 12px 14px; border-radius: 6px; }
+    .bear-box { background: #f0fff8; border-left: 3px solid var(--sell-color); padding: 12px 14px; border-radius: 6px; }
+
+    /* markdown tables */
+    .report-body table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    .report-body th, .report-body td { border: 1px solid #e0e0e0; padding: 7px 10px; font-size: .85rem; }
+    .report-body th { background: #f5f5f5; font-weight: 600; }
+
+    /* final decision */
+    .final-decision {
+      border-radius: 10px; padding: 18px 20px; margin: 16px 20px;
+    }
+    .final-BUY  { background: #fff5f5; border: 1.5px solid var(--buy-color); }
+    .final-HOLD { background: #fffde7; border: 1.5px solid var(--hold-color); }
+    .final-SELL { background: #f0fff8; border: 1.5px solid var(--sell-color); }
+    .decision-badge {
+      display: inline-block; font-size: 1.4rem; font-weight: 800;
+      border-radius: 8px; padding: 6px 24px; margin-bottom: 12px;
+    }
+
+    /* Provider badge */
+    #provider-badge { font-size: .78rem; }
+
+    /* Spinner for running steps */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; display: inline-block; }
+
+    /* Empty state */
+    #empty-state { text-align: center; padding: 60px 20px; color: #aaa; }
+    #empty-state i { font-size: 3rem; display: block; margin-bottom: 12px; }
+  </style>
+</head>
+<body class="d-flex">
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<div id="sidebar" class="p-3 d-flex flex-column gap-3">
+
+  <div>
+    <div class="brand mb-1">⚡🐂 PikaBull</div>
+    <div id="provider-badge" class="text-muted">loading provider…</div>
+  </div>
+
+  <!-- Stock search -->
+  <div>
+    <label class="form-label fw-semibold mb-1">股票搜索</label>
+    <div class="position-relative">
+      <input id="stock-search" type="text" class="form-control form-control-sm"
+             placeholder="输入代码或名称…" autocomplete="off" />
+      <div id="search-dropdown"></div>
+    </div>
+    <div id="selected-stocks" class="mt-2"></div>
+  </div>
+
+  <!-- Date range -->
+  <div>
+    <label class="form-label fw-semibold mb-1">分析区间</label>
+    <div class="d-flex gap-2">
+      <input id="start-date" type="date" class="form-control form-control-sm" />
+      <input id="end-date"   type="date" class="form-control form-control-sm" />
+    </div>
+    <div class="mt-2 d-flex flex-wrap gap-1">
+      <button class="btn btn-outline-secondary btn-sm" onclick="setRange(90)">3个月</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="setRange(180)">6个月</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="setRange(365)">1年</button>
+    </div>
+  </div>
+
+  <!-- Run button -->
+  <button id="run-btn" class="btn btn-primary btn-sm mt-auto" onclick="startAnalysis()">
+    <i class="bi bi-play-fill me-1"></i>开始分析
+  </button>
+  <button id="stop-btn" class="btn btn-outline-danger btn-sm d-none" onclick="stopAnalysis()">
+    <i class="bi bi-stop-fill me-1"></i>停止
+  </button>
+
+</div>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<div id="main">
+  <div id="empty-state">
+    <i class="bi bi-bar-chart-line"></i>
+    <p>选择股票并点击「开始分析」</p>
+    <small>支持同时分析多只股票，结果实时流式返回</small>
+  </div>
+  <div id="results"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+const selected = new Map();   // code → name
+let evtSource = null;
+
+// ── Provider info ──────────────────────────────────────────────────────────────
+async function loadProvider() {
+  try {
+    const r = await fetch('/api/provider');
+    const d = await r.json();
+    const badge = document.getElementById('provider-badge');
+    const icons = { anthropic: '🟠', openai: '🟢', ollama: '🔵' };
+    badge.textContent = `${icons[d.provider] || '⚪'} ${d.provider} · ${d.model}`;
+  } catch { }
+}
+
+// ── Date helpers ───────────────────────────────────────────────────────────────
+function toISO(d) { return d.toISOString().split('T')[0]; }
+function setRange(days) {
+  const end = new Date();
+  const start = new Date(); start.setDate(end.getDate() - days);
+  document.getElementById('start-date').value = toISO(start);
+  document.getElementById('end-date').value   = toISO(end);
+}
+
+// ── Stock search ───────────────────────────────────────────────────────────────
+let searchTimer;
+const searchInput = document.getElementById('stock-search');
+const dropdown = document.getElementById('search-dropdown');
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(doSearch, 200);
+});
+searchInput.addEventListener('blur', () => setTimeout(() => dropdown.style.display='none', 200));
+searchInput.addEventListener('focus', () => { if (searchInput.value) doSearch(); });
+
+async function doSearch() {
+  const q = searchInput.value.trim();
+  if (!q) { dropdown.style.display = 'none'; return; }
+  const r = await fetch(`/api/stocks/search?q=${encodeURIComponent(q)}`);
+  const items = await r.json();
+  dropdown.innerHTML = '';
+  if (!items.length) { dropdown.style.display = 'none'; return; }
+  items.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerHTML = `${s.name}<span class="code">${s.code}</span>`;
+    div.onclick = () => addStock(s.code, s.name);
+    dropdown.appendChild(div);
+  });
+  dropdown.style.display = 'block';
+}
+
+function addStock(code, name) {
+  if (selected.has(code)) { dropdown.style.display='none'; searchInput.value=''; return; }
+  selected.set(code, name);
+  renderTags();
+  dropdown.style.display = 'none';
+  searchInput.value = '';
+}
+
+function removeStock(code) { selected.delete(code); renderTags(); }
+
+function renderTags() {
+  const container = document.getElementById('selected-stocks');
+  container.innerHTML = '';
+  selected.forEach((name, code) => {
+    const tag = document.createElement('span');
+    tag.className = 'stock-tag';
+    tag.innerHTML = `${name} <small>${code}</small><span class="remove" onclick="removeStock('${code}')">✕</span>`;
+    container.appendChild(tag);
+  });
+}
+
+// ── Analysis ───────────────────────────────────────────────────────────────────
+function startAnalysis() {
+  if (!selected.size) { alert('请先选择至少一只股票'); return; }
+  const start = document.getElementById('start-date').value;
+  const end   = document.getElementById('end-date').value;
+  if (!start || !end) { alert('请选择分析区间'); return; }
+
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('run-btn').classList.add('d-none');
+  document.getElementById('stop-btn').classList.remove('d-none');
+
+  const symbols = [...selected.keys()].join(',');
+  const url = `/api/analyze?symbols=${encodeURIComponent(symbols)}&start_date=${start}&end_date=${end}`;
+  evtSource = new EventSource(url);
+  evtSource.onmessage = e => handleEvent(JSON.parse(e.data));
+  evtSource.onerror   = () => stopAnalysis();
+}
+
+function stopAnalysis() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  document.getElementById('run-btn').classList.remove('d-none');
+  document.getElementById('stop-btn').classList.add('d-none');
+}
+
+// ── Event handlers ─────────────────────────────────────────────────────────────
+const STEP_LABELS = {
+  chart:       { icon: 'bi-bar-chart-line',   label: '图表生成' },
+  market:      { icon: 'bi-activity',          label: '技术分析' },
+  fundamental: { icon: 'bi-building',          label: '基本面分析' },
+  news:        { icon: 'bi-newspaper',          label: '新闻资讯' },
+  bull:        { icon: 'bi-arrow-up-circle',   label: '🐂 多方论据' },
+  bear:        { icon: 'bi-arrow-down-circle', label: '🐻 空方论据' },
+  trader:      { icon: 'bi-person-badge',      label: '交易决策' },
+  risk:        { icon: 'bi-shield-check',      label: '风险评估' },
+};
+const STEP_ORDER = ['chart','market','fundamental','news','bull','bear','trader','risk'];
+
+// Track which steps are streaming (have received at least one chunk)
+const _streamingSteps = new Set();
+
+function handleEvent(data) {
+  switch (data.type) {
+    case 'start':      createStockCard(data); break;
+    case 'step_start': markStepRunning(data.symbol, data.step); break;
+    case 'chart':      renderChart(data); break;
+    case 'chunk':      renderChunk(data); break;
+    case 'report':     renderReport(data); break;
+    case 'final':      renderFinal(data); break;
+    case 'error':      renderError(data); break;
+    case 'done':       stopAnalysis(); break;
+  }
+}
+
+// ── Card creation ──────────────────────────────────────────────────────────────
+function createStockCard(data) {
+  const card = document.createElement('div');
+  card.className = 'stock-card';
+  card.id = `card-${data.symbol}`;
+  card.innerHTML = `
+    <div class="card-header">
+      <i class="bi bi-graph-up fs-5"></i>
+      <span class="stock-title">${data.name}（${data.symbol}）</span>
+      <span class="badge-decision ms-auto" id="badge-${data.symbol}">分析中…</span>
+    </div>
+    <div id="chart-${data.symbol}" style="min-height:50px"></div>
+    <div class="step-timeline" id="steps-${data.symbol}">
+      ${STEP_ORDER.map(s => stepItem(s, data.symbol)).join('')}
+    </div>
+    <div id="sections-${data.symbol}"></div>
+  `;
+  document.getElementById('results').appendChild(card);
+}
+
+function stepItem(step, symbol) {
+  const { icon, label } = STEP_LABELS[step] || { icon: 'bi-circle', label: step };
+  return `
+    <div class="step-item" id="step-${symbol}-${step}">
+      <div class="step-icon pending"><i class="bi ${icon}"></i></div>
+      <span>${label}</span>
+    </div>`;
+}
+
+function markStepRunning(symbol, step) {
+  const el = document.getElementById(`step-${symbol}-${step}`);
+  if (!el) return;
+  const icon = el.querySelector('.step-icon');
+  icon.className = 'step-icon running';
+  icon.innerHTML = '<span class="spin">⟳</span>';
+}
+
+function markStepDone(symbol, step) {
+  const el = document.getElementById(`step-${symbol}-${step}`);
+  if (!el) return;
+  const icon = el.querySelector('.step-icon');
+  icon.className = 'step-icon done';
+  icon.innerHTML = '✓';
+}
+
+// ── Chart ──────────────────────────────────────────────────────────────────────
+function renderChart(data) {
+  markStepDone(data.symbol, 'chart');
+  if (!data.chart) return;
+  const el = document.getElementById(`chart-${data.symbol}`);
+  if (!el) return;
+  const fig = data.chart;
+  Plotly.newPlot(el, fig.data, fig.layout, { responsive: true, displayModeBar: false });
+}
+
+// ── Report sections ────────────────────────────────────────────────────────────
+function addSection(symbol, step, title, bodyHtml, open = false) {
+  markStepDone(symbol, step);
+  const sections = document.getElementById(`sections-${symbol}`);
+  if (!sections) return;
+
+  const sec = document.createElement('div');
+  sec.className = 'report-section';
+  sec.innerHTML = `
+    <div class="section-title" onclick="toggleSection(this)">
+      <span><i class="bi ${STEP_LABELS[step]?.icon || 'bi-file-text'} me-2"></i>${title}</span>
+      <i class="bi bi-chevron-down toggle-icon"></i>
+    </div>
+    <div class="section-body report-body${open ? ' open' : ''}">
+      ${bodyHtml}
+    </div>`;
+  sections.appendChild(sec);
+}
+
+function toggleSection(el) {
+  const body = el.nextElementSibling;
+  const icon = el.querySelector('.toggle-icon');
+  body.classList.toggle('open');
+  icon.className = body.classList.contains('open')
+    ? 'bi bi-chevron-up toggle-icon'
+    : 'bi bi-chevron-down toggle-icon';
+}
+
+// ── Streaming chunk renderer ───────────────────────────────────────────────────
+function renderChunk(data) {
+  const { symbol, step, text } = data;
+  const streamId = `stream-${symbol}-${step}`;
+  _streamingSteps.add(`${symbol}:${step}`);
+
+  let streamDiv = document.getElementById(streamId);
+  if (!streamDiv) {
+    // Create the section on first chunk
+    const sections = document.getElementById(`sections-${symbol}`);
+    if (!sections) return;
+    const { icon, label } = STEP_LABELS[step] || { icon: 'bi-file-text', label: step };
+    const sec = document.createElement('div');
+    sec.className = 'report-section';
+    sec.id = `section-${symbol}-${step}`;
+    sec.innerHTML = `
+      <div class="section-title" onclick="toggleSection(this)">
+        <span><i class="bi ${icon} me-2"></i>${label}</span>
+        <i class="bi bi-chevron-up toggle-icon"></i>
+      </div>
+      <div class="section-body open">
+        <pre id="${streamId}" style="white-space:pre-wrap;font-size:.82rem;line-height:1.65;margin:0;font-family:inherit;background:none;border:none;padding:0"></pre>
+      </div>`;
+    sections.appendChild(sec);
+    streamDiv = document.getElementById(streamId);
+  }
+  streamDiv.textContent += text;
+  // Auto-scroll stream div into view
+  streamDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderReport(data) {
+  const key = `${data.symbol}:${data.step}`;
+  if (_streamingSteps.has(key)) {
+    // Replace the live <pre> stream with rendered markdown
+    const sec = document.getElementById(`section-${data.symbol}-${data.step}`);
+    if (sec) {
+      const body = sec.querySelector('.section-body');
+      if (body) body.innerHTML = `<div class="report-body">${marked.parse(data.content || '')}</div>`;
+    }
+    markStepDone(data.symbol, data.step);
+  } else {
+    addSection(data.symbol, data.step, data.label, marked.parse(data.content || ''));
+  }
+}
+
+function renderFinal(data) {
+  // Update header badge
+  const badge = document.getElementById(`badge-${data.symbol}`);
+  if (badge) {
+    const labels = { BUY: '买入 ▲', HOLD: '持有 —', SELL: '卖出 ▼' };
+    badge.textContent = labels[data.decision] || data.decision;
+    badge.className = `badge-decision ms-auto badge-${data.decision}`;
+  }
+
+  // Final decision card
+  const sections = document.getElementById(`sections-${data.symbol}`);
+  const labels = { BUY: '买入 (BUY)', HOLD: '持有 (HOLD)', SELL: '卖出 (SELL)' };
+  const colors = { BUY: 'var(--buy-color)', HOLD: 'var(--hold-color)', SELL: 'var(--sell-color)' };
+  const div = document.createElement('div');
+  div.className = `final-decision final-${data.decision}`;
+  div.innerHTML = `
+    <div class="decision-badge" style="background:${colors[data.decision]};color:#fff">
+      ${labels[data.decision] || data.decision}
+    </div>
+    <div style="font-size:.85rem;color:#555">
+      综合技术面、基本面、资讯面及多空辩论，给出以上投资建议。请结合自身风险偏好决策。
+    </div>`;
+  sections.appendChild(div);
+}
+
+function renderError(data) {
+  const sections = document.getElementById(`sections-${data.symbol}`);
+  if (!sections) return;
+  const div = document.createElement('div');
+  div.className = 'alert alert-danger m-3';
+  div.textContent = `错误（${data.symbol}）: ${data.message}`;
+  sections.appendChild(div);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+setRange(180);
+loadProvider();
+</script>
+</body>
+</html>
