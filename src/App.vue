@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { marked } from "marked";
 import Plotly from "plotly.js-dist-min";
+import BacktestView from "./BacktestView.vue";
 
 interface StockResult {
   code: string;
@@ -112,7 +113,7 @@ const enabledAgents = reactive(new Set(TOGGLEABLE_AGENTS));
 const cards = reactive(new Map<string, StockCard>());
 const expandedSections = reactive(new Set<string>());
 const providerInfo = ref({ provider: "", model: "" });
-const currentView = ref<"home" | "analysis">("home");
+const currentView = ref<"home" | "analysis" | "backtest">("home");
 const marketIndices = ref<MarketIndex[]>([]);
 const watchlist = ref<WatchlistItem[]>([]);
 const watchlistQuotes = reactive(new Map<string, StockQuote>());
@@ -671,7 +672,7 @@ async function setActiveModel(id: string) {
 <template>
   <div class="app-container">
     <!-- Sidebar -->
-    <div class="sidebar">
+    <div v-if="currentView !== 'backtest'" class="sidebar">
       <div class="brand">⚡🐂 PikaBull</div>
       <div class="provider-badge" @click="openConfigModal" title="点击配置模型">
         <template v-if="providerInfo.provider">
@@ -680,6 +681,13 @@ async function setActiveModel(id: string) {
         </template>
         <template v-else>⚙ 点击配置模型</template>
         <span class="config-gear">⚙</span>
+      </div>
+
+      <!-- Nav buttons -->
+      <div v-if="currentView === 'home'" class="nav-buttons">
+        <button class="nav-btn" @click="currentView = 'backtest'">
+          回测系统
+        </button>
       </div>
 
       <!-- Stock search (home only) -->
@@ -783,8 +791,14 @@ async function setActiveModel(id: string) {
       </template>
     </div>
 
+    <!-- Backtest view (full viewport, own sidebar) -->
+    <BacktestView
+      v-if="currentView === 'backtest'"
+      @go-home="goHome"
+    />
+
     <!-- Main content -->
-    <div class="main-content">
+    <div v-if="currentView !== 'backtest'" class="main-content">
       <div v-if="errorMessage" class="error-banner" @click="errorMessage = ''">
         {{ errorMessage }}
         <small style="display:block;margin-top:4px;opacity:0.7">点击关闭</small>
@@ -1152,6 +1166,29 @@ body {
 
 .provider-badge:hover .config-gear {
   opacity: 0.8;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid #c5cae9;
+  border-radius: 8px;
+  background: #f8f9ff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1a237e;
+  transition: all 0.15s;
+}
+
+.nav-btn:hover {
+  background: #e8eaf6;
+  border-color: #1a237e;
 }
 
 .section {

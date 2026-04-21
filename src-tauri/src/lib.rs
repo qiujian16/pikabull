@@ -1,4 +1,5 @@
 mod agents;
+mod backtest;
 mod commands;
 mod config_store;
 mod providers;
@@ -31,6 +32,12 @@ pub fn run() {
             commands::save_analysis_report,
             commands::get_saved_report,
             commands::list_report_metas,
+            commands::run_backtest,
+            commands::list_backtests,
+            commands::get_backtest,
+            commands::delete_backtest,
+            commands::get_preset_strategies,
+            commands::translate_strategy,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

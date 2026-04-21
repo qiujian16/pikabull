@@ -26,7 +26,7 @@ fn db_path() -> PathBuf {
     path
 }
 
-fn get_conn() -> &'static Mutex<Connection> {
+pub(crate) fn get_conn() -> &'static Mutex<Connection> {
     DB.get_or_init(|| {
         let path = db_path();
         let conn = Connection::open(&path).expect("Failed to open config database");
@@ -65,7 +65,23 @@ fn get_conn() -> &'static Mutex<Connection> {
                  key        TEXT PRIMARY KEY,
                  data       TEXT NOT NULL,
                  updated_at TEXT NOT NULL
-             );",
+             );
+             CREATE TABLE IF NOT EXISTS backtest_runs (
+                 id              TEXT PRIMARY KEY,
+                 symbol          TEXT NOT NULL,
+                 name            TEXT NOT NULL,
+                 strategy_name   TEXT NOT NULL,
+                 strategy_json   TEXT NOT NULL,
+                 start_date      TEXT NOT NULL,
+                 end_date        TEXT NOT NULL,
+                 initial_capital REAL NOT NULL,
+                 commission_rate REAL NOT NULL,
+                 stamp_tax_rate  REAL NOT NULL,
+                 result_json     TEXT NOT NULL,
+                 created_at      TEXT NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS idx_backtest_symbol ON backtest_runs (symbol);
+             CREATE INDEX IF NOT EXISTS idx_backtest_created ON backtest_runs (created_at);",
         )
         .expect("Failed to create config tables");
         Mutex::new(conn)

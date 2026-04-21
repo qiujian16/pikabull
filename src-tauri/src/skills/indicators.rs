@@ -1,6 +1,6 @@
 use crate::skills::stock_data;
 
-fn sma(closes: &[f64], period: usize) -> Vec<Option<f64>> {
+pub(crate) fn sma(closes: &[f64], period: usize) -> Vec<Option<f64>> {
     closes
         .iter()
         .enumerate()
@@ -15,7 +15,7 @@ fn sma(closes: &[f64], period: usize) -> Vec<Option<f64>> {
         .collect()
 }
 
-fn ema(closes: &[f64], span: usize) -> Vec<f64> {
+pub(crate) fn ema(closes: &[f64], span: usize) -> Vec<f64> {
     let k = 2.0 / (span as f64 + 1.0);
     let mut result = vec![0.0; closes.len()];
     if closes.is_empty() {
@@ -28,9 +28,9 @@ fn ema(closes: &[f64], span: usize) -> Vec<f64> {
     result
 }
 
-fn rsi14(closes: &[f64]) -> Vec<Option<f64>> {
+pub(crate) fn rsi(closes: &[f64], period: usize) -> Vec<Option<f64>> {
     let mut result = vec![None; closes.len()];
-    if closes.len() < 15 {
+    if closes.len() < period + 1 {
         return result;
     }
 
@@ -45,18 +45,19 @@ fn rsi14(closes: &[f64]) -> Vec<Option<f64>> {
         }
     }
 
-    let mut avg_gain: f64 = gains[1..15].iter().sum::<f64>() / 14.0;
-    let mut avg_loss: f64 = losses[1..15].iter().sum::<f64>() / 14.0;
+    let p = period as f64;
+    let mut avg_gain: f64 = gains[1..=period].iter().sum::<f64>() / p;
+    let mut avg_loss: f64 = losses[1..=period].iter().sum::<f64>() / p;
 
     if avg_loss == 0.0 {
-        result[14] = Some(100.0);
+        result[period] = Some(100.0);
     } else {
-        result[14] = Some(100.0 - 100.0 / (1.0 + avg_gain / avg_loss));
+        result[period] = Some(100.0 - 100.0 / (1.0 + avg_gain / avg_loss));
     }
 
-    for i in 15..closes.len() {
-        avg_gain = (avg_gain * 13.0 + gains[i]) / 14.0;
-        avg_loss = (avg_loss * 13.0 + losses[i]) / 14.0;
+    for i in (period + 1)..closes.len() {
+        avg_gain = (avg_gain * (p - 1.0) + gains[i]) / p;
+        avg_loss = (avg_loss * (p - 1.0) + losses[i]) / p;
         if avg_loss == 0.0 {
             result[i] = Some(100.0);
         } else {
@@ -66,7 +67,7 @@ fn rsi14(closes: &[f64]) -> Vec<Option<f64>> {
     result
 }
 
-fn rolling_std(closes: &[f64], period: usize) -> Vec<Option<f64>> {
+pub(crate) fn rolling_std(closes: &[f64], period: usize) -> Vec<Option<f64>> {
     closes
         .iter()
         .enumerate()
@@ -115,7 +116,7 @@ pub fn get_technical_indicators(
         None
     };
     let rsi = if indicator_list.iter().any(|i| i == "rsi14") {
-        Some(rsi14(&closes))
+        Some(rsi(&closes, 14))
     } else {
         None
     };

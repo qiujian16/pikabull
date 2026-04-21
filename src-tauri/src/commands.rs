@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 
-use crate::agents::workflow;
+use crate::agents::{strategy_translator, workflow};
+use crate::backtest;
 use crate::config_store;
 use crate::providers;
 use crate::skills::stock_data;
@@ -161,4 +163,101 @@ pub async fn start_analysis(
     }
 
     Ok(())
+}
+
+// ── Backtest ──
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn run_backtest(
+    app: AppHandle,
+    symbol: String,
+    name: String,
+    start_date: String,
+    end_date: String,
+    strategy_json: String,
+    initial_capital: f64,
+    commission_rate: Option<f64>,
+    stamp_tax_rate: Option<f64>,
+) -> Result<String, String> {
+    let strategy: backtest::strategy::Strategy =
+        serde_json::from_str(&strategy_json).map_err(|e| format!("Invalid strategy JSON: {e}"))?;
+
+    let config = backtest::engine::BacktestConfig {
+        symbol: symbol.clone(),
+        start_date: start_date.clone(),
+        end_date: end_date.clone(),
+        initial_capital,
+        strategy,
+        commission_rate: commission_rate.unwrap_or(0.0003),
+        stamp_tax_rate: stamp_tax_rate.unwrap_or(0.001),
+    };
+
+    let _ = app.emit("backtest-progress", json!({"stage": "fetching", "percent": 10}));
+
+    let rows = tokio::task::spawn_blocking({
+        let symbol = symbol.clone();
+        let sd = start_date.clone();
+        let ed = end_date.clone();
+        move || stock_data::fetch_price_data(&symbol, &sd, &ed)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+    .map_err(|e| format!("Failed to fetch price data: {e}"))?;
+
+    let _ = app.emit("backtest-progress", json!({"stage": "computing", "percent": 40, "bars": rows.len()}));
+
+    let result = backtest::engine::run_backtest(&config, &rows)?;
+
+    let _ = app.emit("backtest-progress", json!({"stage": "saving", "percent": 80}));
+
+    let id = tokio::task::spawn_blocking({
+        let name = name.clone();
+        let symbol = symbol.clone();
+        let config = config.clone();
+        let result = result.clone();
+        move || backtest::store::save(&symbol, &name, &config, &result)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+
+    let _ = app.emit("backtest-progress", json!({"stage": "complete", "percent": 100}));
+
+    let mut response = serde_json::to_value(&result).map_err(|e| format!("Serialize error: {e}"))?;
+    response["id"] = serde_json::Value::String(id);
+    serde_json::to_string(&response).map_err(|e| format!("Serialize error: {e}"))
+}
+
+#[tauri::command]
+pub fn list_backtests() -> Vec<backtest::store::BacktestMeta> {
+    backtest::store::list()
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn get_backtest(id: String) -> Option<backtest::store::BacktestRecord> {
+    backtest::store::get(&id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn delete_backtest(id: String) {
+    backtest::store::delete(&id);
+}
+
+#[tauri::command]
+pub fn get_preset_strategies() -> Vec<backtest::presets::PresetStrategy> {
+    backtest::presets::list_presets()
+}
+
+#[tauri::command]
+pub async fn translate_strategy(description: String) -> Result<String, String> {
+    let provider = providers::create_active_provider()?;
+
+    let (strategy, explanation) =
+        strategy_translator::translate_strategy(provider.as_ref(), &description).await?;
+
+    let result = serde_json::json!({
+        "strategy": strategy,
+        "explanation": explanation,
+    });
+
+    serde_json::to_string(&result).map_err(|e| format!("Serialize error: {e}"))
 }
