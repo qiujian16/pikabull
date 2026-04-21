@@ -1,0 +1,32 @@
+[package]
+name = "pikabull"
+version = "0.1.0"
+description = "Multi-agent AI stock analysis for China A-shares"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "pikabull_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json", "stream", "blocking"] }
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+dotenvy = "0.15"
+futures = "0.3"
+async-trait = "0.1"
+urlencoding = "2"
+dirs-next = "2"
+log = "0.4"
+env_logger = "0.11"
+encoding_rs = "0.8"
